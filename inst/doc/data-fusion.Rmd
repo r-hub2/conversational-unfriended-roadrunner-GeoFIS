@@ -1,0 +1,325 @@
+---
+title: "Data Fusion with GeoFIS"
+subtitle: "Package GeoFIS `r packageVersion('GeoFIS')`"
+author: "Jean-Luc Lablée, Serge Guillaume"
+output: 
+  rmarkdown::html_vignette:
+    fig_height: 5
+    fig_width: 5
+    toc: true
+    toc_depth: 4
+vignette: >
+  %\VignetteIndexEntry{Data Fusion with GeoFIS}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+bibliography: "`r system.file('REFERENCES.bib', package='GeoFIS')`"
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+options(width = 180)
+```
+
+## Introduction
+
+This vignette illustrates the design of a Data Fusion system using the GeoFIS R package.
+
+See [Data fusion documentation](https://www.geofis.org/en/documentation-en/data-fusion/) for more details about concepts of data fusion.
+
+The example is an agronomic case study detailed in "A fuzzy logic based soil chemical quality index for cacao" [@denys20].
+
+```{r, setup}
+library(GeoFIS)
+```
+
+## Loading data
+
+The data fusion process accepts input dataset of class [data.frame](https://www.rdocumentation.org/packages/base/topics/data.frame) or [Spatial](https://www.rdocumentation.org/packages/sp/topics/Spatial-class)*DataFrame of the [sp](https://cran.r-project.org/package=sp) R package.<br>
+Only the numeric attributes of the dataset can be used.<br>
+
+In this example we use the `tolima` dataset available in the GeoFIS R package [@denys20]:
+
+```{r}
+data(tolima)
+fusion <- NewFusion(tolima)
+```
+
+## The aggregation system
+
+The aggregation system is built as a tree, based on the [data.tree](https://cran.r-project.org/package=data.tree) R package.
+
+* Each input of the system is a leaf of the tree.
+* Each node of the tree is an aggregation operation.
+* The root of the tree is the result of the aggregation system.
+
+Each aggregation node can also be used as an input for another aggregation step, yielding a hierarchical structure.
+
+### Build inputs
+
+The goal of this step is to turn raw data of individual information sources into satisfaction degrees.<br>
+The `NewFusionInput` function that builds an input leaf for the aggregation system takes 3 parameters:
+
+1. the input name
+2. the membership function (Mf) used to turn raw data into satisfaction degrees.<br>
+several types of Mf are proposed in the [FisPro](https://cran.r-project.org/package=FisPro) R package.
+    + `NewMfTrapezoidalInf`: low values are preferred.
+    + `NewMfTrapezoidalSup`: high values are preferred.
+    + `NewMfTrapezoidal`: around an interval.
+    + `NewMfTriangular`: about a value.
+3. the name of the attribute in the input dataset (the default is the same as the input name).
+
+### Build aggregation nodes
+
+The goal of this step is to summarize the inputs satisfaction degrees into a single one through an aggregation operator.
+
+The `NewFusionAggreg` function that builds the aggregation node takes several parameters:
+
+1. the node name.
+2. the aggregation operator.
+3. the leafs / nodes used as inputs of the aggregation operator.
+
+In the GeoFIS R package, 4 aggregation operators are implemented:
+
+#### Numerical operators
+
+* `NewAggregWam` build a WAM operator with the specified weights.
+* `NewAggregOwa` build an OWA operator with the specified weights.
+
+#### Aggregation using linguistic rules
+
+`NewAggregFis` build a linguistic rule-based operator based on a Fuzzy Inference System (Fis), a `Fis` object of [FisPro](https://cran.r-project.org/package=FisPro) R package.
+
+The Fis can be built with the [FisPro](https://www.fispro.org) software or with the `NewFisFusion` function.
+
+The `NewFisFusion` function helps to generate a Fis and take 5 parameters:
+
+1. the Fis name.
+2. the Fis inputs names.
+3. the granularity (number of Mf) for each Fis input, in range [2, 5].
+    + with granularity = 2, the Mf labels are: "low", "high"
+    + with granularity = 3, the Mf labels are: "low", "average", "high"
+    + with granularity = 4, the Mf labels are: "very_low", "low", "high", "very_high"
+    + with granularity = 5, the Mf labels are: "very_low", "low", "average", "high", "very_high"
+4. the Fis output name.
+5. the conclusions of the rulebase.<br>
+the rule based is generated in the lexicographic order of inputs Mfs.
+    + if the conclusions are a numeric vector, a `FisOutCrisp` output will be added to the Fis.
+    + if the conclusions are a character vector, a `FisOutFuzzy` output will be added to the Fis.
+
+#### Aggregation using a function
+
+`NewAggregFunction` build an operator based on a function.<br>
+The function must accepts a numeric vector as parameter, e.g. `mean` function or user-defined function.
+
+## The Application example
+
+In this application example [@denys20], we build a hierarchical system with 8 inputs, 2 rule-based aggregation nodes and 1 WAM node. 
+
+The inputs:
+
+```{r}
+potassium <- NewFusionInput("K", NewMfTrapezoidalSup(0.2, 0.6))
+phosphorus <- NewFusionInput("P", NewMfTrapezoidalSup(5, 15))
+balance_gap <- NewFusionInput("Bal_Gap", NewMfTrapezoidalInf(0, 0.5), "BalanceGap")
+n_gap <- NewFusionInput("N_Gap", NewMfTriangular(0.5, 1, 1.5), "Ngap_N_OpN")
+base_sat <- NewFusionInput("Base_Sat", NewMfTrapezoidalSup(0.4, 0.6), "Base_S")
+org_matter <- NewFusionInput("OM", NewMfTrapezoidalSup(3, 5))
+ph <- NewFusionInput("pH", NewMfTrapezoidal(5, 5.5, 6.5, 7.5))
+cadmium <- NewFusionInput("Cd", NewMfTrapezoidalInf(0, 0.43), "Cadmium")
+```
+
+The Macronutrients rulebase:
+
+```{r}
+macronutrients_fis <- NewFisFusion(
+  "MacN", # Fis name
+  c("Bal_Gap", "K", "P", "N_Gap", "Base_Sat"), # Fis inputs names
+  c(2, 2, 2, 2, 2), # Fis inputs granularities
+  "MacN", # Fis output name
+  c(
+    0, 0.1, 0.15, 0.2, 0.25, 0.35, 0.4, 0.45,
+    0.3, 0.4, 0.45, 0.5, 0.55, 0.65, 0.7, 0.75,
+    0.4, 0.3, 0.4, 0.45, 0.5, 0.55, 0.65, 0.7,
+    0.55, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 1
+  ) # Fis conclusions
+)
+```
+
+Print the Macronutrients rulebase:
+
+```{r}
+print(macronutrients_fis)
+```
+
+The Macronutrients aggregation node:
+
+```{r}
+macronutrients_aggreg <- NewFusionAggreg(
+  "MacN",
+  NewAggregFis(macronutrients_fis),
+  balance_gap, potassium, phosphorus, n_gap, base_sat
+)
+```
+
+The Soil Nutritional Balance rulebase:
+
+```{r}
+nutri_balance_fis <- NewFisFusion(
+  "Nutri_Bal", # Fis name
+  c("pH", "OM", "MacN"), # Fis inputs names
+  c(2, 2, 2), # Fis inputs granularities
+  "Nutri_Bal", # Fis output name
+  c(0, 0.2, 0.3, 0.5, 0.4, 0.6, 0.7, 1.0) # Fis conclusions
+)
+```
+
+Print the Macronutrients rulebase:
+
+```{r}
+print(nutri_balance_fis)
+```
+
+The Soil Nutritional aggregation node:
+
+```{r}
+nutri_balance_aggreg <- NewFusionAggreg(
+  "Nutri_Bal",
+  NewAggregFis(nutri_balance_fis),
+  ph, org_matter, macronutrients_aggreg
+)
+```
+
+The Chemical aggregation node:
+
+```{r}
+chemical_aggreg <- NewFusionAggreg(
+  "Chemical",
+  NewAggregWam(weights = c(0.3, 0.7)),
+  cadmium, nutri_balance_aggreg
+)
+```
+
+Print the Chemical aggregation tree with aggregation operators and input leafs:
+
+```{r}
+print(chemical_aggreg, "aggreg", "mf")
+```
+
+Use the chemical_aggreg as the root node of the Data Fusion system:
+
+```{r}
+fusion$aggregate <- chemical_aggreg
+```
+
+Perform the Data Fusion process and read output:
+
+```{r}
+fusion$perform()
+output <- fusion$output()
+```
+
+The output data frame contains all satisfaction degrees of inputs leafs, the aggregation value of all nodes, defined into the aggregation system.
+
+```{r}
+print(output, digits = 2)
+```
+
+## Learning illustration
+
+To model the decision maker preferences, the parameters of the aggregation operator can be learned from data. The user must in this case provide an additional target, for each sample.<br>
+
+The rule conclusions of a FIS operator can be optimized using the [FisPro](https://www.fispro.org) software, the reader may refer to the specific documentation [Learning with FisPro](https://www.fispro.org/documentation/en/LEARNING/).<br> 
+
+The weights of the WAM and the OWA can be learned using a least square minimization procedure under two constraints for the weights: they must be positive and their sum should be 1. The process is illustrated using a toy example, the fusion_cars dataset, but it was also applied to the previously mentioned tolima dataset [@denys20].
+
+The fusion_cars data include four cars (from 1 to 4) described by four attributes:
+
+* A: the acceleration time (s) from 0 to 100 km/h.
+* V: the volume of the trunk (dm^3^).
+* S: the maximum speed (km/h).
+* C: the gas consumption (l per 100 km).
+
+The $\textit{ideal}$ vehicle should minimize A and C while maximizing V and S.
+The dataset is as follows:
+
+```{r}
+data(fusion_cars)
+print(fusion_cars)
+```
+
+To turn the raw data into preference degrees, the following transformation data are used:
+
+```{r}
+a <- NewFusionInput("µA", NewMfTrapezoidalInf(4, 20), "A")
+v <- NewFusionInput("µV", NewMfTrapezoidalSup(100, 500), "V")
+s <- NewFusionInput("µS", NewMfTrapezoidalSup(120, 220), "S")
+c <- NewFusionInput("µC", NewMfTrapezoidalInf(6, 16), "C")
+```
+
+This yields the following degrees:
+
+```{r}
+fusion <- NewFusion(fusion_cars)
+fusion$aggregate <- list(a, v, s, c)
+fusion$perform()
+degrees <- fusion$output()
+print(degrees)
+```
+
+The first vehicle, which represents a good trade-off, is preferred to the others. This preference can modeled by any target with the highest value in the first location, for example:
+
+```{r}
+target <- c(0.8, 0.6, 0.6, 0.6)
+```
+
+or by the binary following one, that is used in this example:
+
+```{r}
+target <- c(1, 0, 0, 0)
+```
+
+The WAM learning gives the following results:
+
+```{r}
+wam_weights <- LearnWamWeights(degrees, target)
+print(wam_weights)
+```
+
+with inferred values:
+```{r}
+wam_aggreg <- NewFusionAggreg("wam", NewAggregWam(wam_weights), a, v, s, c)
+fusion$aggregate <- wam_aggreg
+fusion$perform()
+wam_inferred <- fusion$output()["wam"]
+print(wam_inferred)
+```
+
+The result is not the expected one, the car ‘4’ has the highest score, the preferred car ‘1’ is ranked second: the WAM operator is not able to model the compromise
+
+The OWA learning gives the following results:
+
+```{r}
+owa_weights <- LearnOwaWeights(degrees, target)
+print(owa_weights)
+```
+
+In this toy example, the OWA aggregator returns the minimum: the whole weight is put on the smallest degree. This ensures that the decision maker preference is accurately modeled:
+
+```{r}
+owa_aggreg <- NewFusionAggreg("owa", NewAggregOwa(owa_weights), a, v, s, c)
+fusion$aggregate <- owa_aggreg
+fusion$perform()
+owa_inferred <- fusion$output()["owa"]
+print(owa_inferred)
+```
+
+## Publications
+
+---
+nocite: |
+  @gistam20, @agriculture8060073
+...
+

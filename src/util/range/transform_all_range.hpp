@@ -1,0 +1,71 @@
+/**
+ * GeoFIS R package
+ *
+ * Copyright (C) 2021 INRAE
+ *
+ * Authors:
+ * 	Jean-luc Lablée - INRAE
+ * 	Serge Guillaume - INRAE
+ *
+ * License: CeCILL v2.1
+ * 	https://cecill.info/licences/Licence_CeCILL_V2.1-en.html
+ * 	https://cecill.info/licences/Licence_CeCILL_V2.1-fr.html
+ *
+ * This software is governed by the CeCILL license under French law and
+ * abiding by the rules of distribution of free software.  You can  use,
+ * modify and/ or redistribute the software under the terms of the CeCILL
+ * license as circulated by CEA, CNRS and INRIA at the following URL
+ * "https://cecill.info".
+ *
+ * As a counterpart to the access to the source code and  rights to copy,
+ * modify and redistribute granted by the license, users are provided only
+ * with a limited warranty  and the software's author,  the holder of the
+ * economic rights, and the successive licensors have only limited liability.
+ *
+ * In this respect, the user's attention is drawn to the risks associated
+ * with loading,  using,  modifying and/or developing or reproducing the
+ * software by the user in light of its specific status of free software,
+ * that may mean  that it is complicated to manipulate,  and  that  also
+ * therefore means  that it is reserved for developers  and  experienced
+ * professionals having in-depth computer knowledge. Users are therefore
+ * encouraged to load and test the software's suitability as regards their
+ * requirements in conditions enabling the security of their systems and/or
+ * data to be ensured and,  more generally, to use and operate it in the
+ * same conditions as regards security.
+ *
+ * The fact that you are presently reading this means that you have had
+ * knowledge of the CeCILL license and that you accept its terms.
+ */
+#ifndef TRANSFORM_ALL_RANGE_HPP_
+#define TRANSFORM_ALL_RANGE_HPP_
+
+#include <boost/range/iterator_range.hpp>
+#include <util/iterator/transform_all_iterator.hpp>
+
+namespace util {
+
+template <class Binary, class Range1, class Range2> struct transform_all_range_traits {
+
+	typedef boost::iterator_range<transform_all_iterator<Binary, typename boost::range_iterator<Range1>::type, typename boost::range_iterator<Range2>::type> > base_type;
+};
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+template <class Binary, class Range1, class Range2> class transform_all_range : public transform_all_range_traits<Binary, Range1, Range2>::base_type {
+
+	typedef typename transform_all_range_traits<Binary, Range1, Range2>::base_type base_type;
+
+public:
+	transform_all_range() {}
+	transform_all_range(const Binary &binary, Range1 &range1, Range2 &range2) : base_type(make_transform_all_iterator(boost::begin(range1), boost::begin(range2), boost::end(range2), binary), make_transform_all_iterator(boost::end(range1), boost::begin(range2), boost::end(range2), binary)) {}
+};
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+template <class Binary, class Range1, class Range2> inline transform_all_range<Binary, const Range1, const Range2> make_transform_all(const Range1 &range1, const Range2 &range2, const Binary &binary) {
+	return transform_all_range<Binary, const Range1, const Range2>(binary, range1, range2);
+}
+
+} // namespace util
+
+#endif /* TRANSFORM_ALL_RANGE_HPP_ */

@@ -1,0 +1,13 @@
+#!/bin/sh
+
+rm -rf  src/*.o \
+	src/base/*.o \
+	src/util/*.o \
+	src/util/double/*.o \
+	src/geofis/process/zoning/*.o \
+	src/geofis/process/zoning/fusion/*.o \
+	src/geofis/process/zoning/merge/*.o \
+	src/geofis/process/zoning/neighborhood/*.o \
+	src/geofis/process/zoning/post/*.o \
+	src/geofis/process/zoning/voronoi/*.o \
+	src/GeoFIS.so

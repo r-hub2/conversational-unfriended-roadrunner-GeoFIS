@@ -1,0 +1,28 @@
+CXX_STD=CXX17
+
+FISPRO_LIB_DIR=$(shell $(R_HOME)/bin/Rscript -e "cat(system.file('lib', package='FisPro', mustWork=TRUE))")
+
+BOOST_CPPFLAGS=-DBOOST_NO_AUTO_PTR -DBOOST_ALLOW_DEPRECATED_HEADERS -DBOOST_MP_DISABLE_DEPRECATE_03_WARNING -DBOOST_MATH_DISABLE_DEPRECATED_03_WARNING -DBOOST_DISABLE_ASSERTS
+CGAL_CPPFLAGS=-DCGAL_DISABLE_ROUNDING_MATH_CHECK=ON
+PKG_CPPFLAGS=-I. $(BOOST_CPPFLAGS) $(CGAL_CPPFLAGS) -DR_PACKAGE
+PKG_LIBS=-L$(FISPRO_LIB_DIR)$(R_ARCH) -lmpfr -lgmp -lFisPro
+
+UTIL=util
+FISPRO=base
+ZONING=geofis/process/zoning
+
+UTIL_SOURCES=$(UTIL)/double/double.cpp $(UTIL)/double/boost_double_comparison.cpp
+ZONING_SOURCES=$(ZONING)/voronoi/voronoi_process_impl.cpp $(ZONING)/voronoi/voronoi_process.cpp $(ZONING)/neighborhood/neighborhood_process_impl.cpp $(ZONING)/neighborhood/neighborhood_process.cpp $(ZONING)/fusion/fusion_process_impl.cpp $(ZONING)/fusion/fusion_process.cpp $(ZONING)/merge/merge_process_impl.cpp $(ZONING)/merge/merge_process.cpp $(ZONING)/zoning_process_impl.cpp $(ZONING)/zoning_process.cpp
+GEOFIS_SOURCES=$(ZONING_SOURCES)
+WRAPPER_SOURCES=zoning_wrapper.cpp
+MODULE_SOURCES=zoning_module.cpp
+SOURCES=RcppExports.cpp $(MODULE_SOURCES) $(WRAPPER_SOURCES) $(UTIL_SOURCES) $(GEOFIS_SOURCES)
+
+OBJECTS=$(SOURCES:.cpp=.o)
+
+all: $(SHLIB)
+
+clean:
+	@rm -f $(OBJECTS) $(SHLIB)
+
+.PHONY: all clean
