@@ -27,4 +27,4 @@ LinkingTo: Rcpp, BH, FisPro
 Suggests: testthat, rlang, knitr, rmarkdown, RColorBrewer, R.rsp
 RoxygenNote: 7.3.2
 VignetteBuilder: knitr, R.rsp
-Packaged: 2024-08-29 10:03:03 UTC; jllablee
+Packaged: 2024-08-29 12:45:42 UTC; jllablee
